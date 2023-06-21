@@ -9,7 +9,10 @@ library(geojsonsf)
 library(lubridate)
 
 # upload data
-wwp <- read_csv('wwp_data.csv')
+#wwp <- read_csv('data/wwp_data.csv')
+
+wwp <- read_csv("C:/Users/spenc/Documents/GitHub/Consult_S23_WWP/data/derived/Spencer Journal Dates.csv") %>%
+  select(-c(date, day_text))
 
 # remove data that does not include locations
 location_data <- wwp[!is.na(wwp$Places),]
@@ -31,11 +34,11 @@ sorted_data <- journal[order(journal$id),]
 sorted_data$text_transcript <- paste0(sorted_data$text_transcript, ' %%%%', sorted_data$id, '%%%% ')
 
 
-######## code from Trey and Emma 
+######## All this is to get exact days, which will hopefully be unnecessary for 2 reasons
 
 # This paste turns it into one long string 
 n_full_text <- paste(sorted_data$`text_transcript`, collapse = "")
-# This is the pattern that removes all posible ways that WW wrote his dates
+# This is the pattern that removes all possible ways that WW wrote his dates
 pattern_trey <- "(([J|F|M|A|J|S|O|N|D][a-z]{2,8}\\s){1,2}\\d{1,2}(th|st|rd|nd)?,?(\\s\\d{4})?|[J|F|M|A|J|S|O|N|D][a-z]{3,8}\\s\\d{1,2}(th|st|rd|nd)?) ~"
 # Removing of the dates
 matches <- str_extract_all(n_full_text, pattern=pattern_trey) %>% unlist()
@@ -103,7 +106,11 @@ sep_places <- sep_places %>%
 # dropping all columns that do not include a county
 format <- sep_places %>%
   mutate(format = grepl("[A-Za-z ]+(,)+[A-Za-z ]+(,)+[A-Z a-z]+$", location)) %>%
+    ##Anything with 3 words and 2 commas (including those with more)
   subset(format != 'FALSE')
+##(not because they wouldn't get found, but because now it's standardized)
+##Also drops references to just states ('Missouri','Utah',etc)
+## grepl is basically str_detect(), but probably faster
 
 # separating location column into city, county, and state columns
 data <- format %>%
@@ -127,7 +134,7 @@ data$city <- str_replace(data$city, "Great Salt Lake City", "Salt Lake City")
 ############################################################################
 
 
-cities <- read_csv("uscities.csv") %>%
+cities <- read_csv("data/uscities.csv") %>%
   select(city, state_name, lat, lng)
 
 # creating a geometry point out of the latitude and longitude
@@ -147,9 +154,8 @@ city_data['search_url'] <- paste0("https://wilfordwoodruffpapers.org/places?sear
 group_data <- city_data %>% 
   group_by(city, state_name)
 
-# creating a count column fro how many times every county is mentioned
+# creating a count column for how many times every city is mentioned [said county, think it isn't]
 count_data <- transform(group_data,city_frequency=ave(seq(nrow(group_data)),search_url,FUN=length))
-
 
 ############################################################################
 ################################## GRAPH ###################################
@@ -171,11 +177,12 @@ data2$day = as.Date(data2$day)
 data3 <- data2 %>%
   select(day, point)
 
-# creating a color pallette and bins for number of mentions
+# creating a color palette and bins for number of mentions
 mybins <- c(0,2,5,10,50,100,200,Inf)
 mypalette <- colorBin(palette="YlGnBu", domain=data2$city_frequency, na.color="transparent", bins=mybins)
 
 # creating leaflet graph
+## Slider will later be built into the search, so probably not needed
 leaflet() %>%
   addProviderTiles('CartoDB.Positron') %>%
   setView(-98.5795, 39.8283, zoom = 3) %>%
